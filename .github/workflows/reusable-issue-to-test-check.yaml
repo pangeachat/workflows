@@ -1,0 +1,106 @@
+name: Reusable — Issue TO TEST enforcement
+
+on:
+  workflow_call:
+    inputs:
+      needs_testing_labels:
+        description: Comma-separated labels to add on close when not opted out. Default 'needs testing'.
+        type: string
+        default: 'needs testing'
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Process issue event
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          ACTION: ${{ github.event.action }}
+          STATE_REASON: ${{ github.event.issue.state_reason }}
+          LABELS_INPUT: ${{ inputs.needs_testing_labels }}
+        run: |
+          ISSUE_BODY=$(gh issue view "$NUMBER" --json body -q .body)
+
+          OPTED_OUT=false
+          if echo "$ISSUE_BODY" | grep -qi "no client testing needed"; then
+            OPTED_OUT=true
+          fi
+
+          HAS_PHRASE=false
+          HAS_BOX=false
+          if echo "$ISSUE_BODY" | grep -qi "TO TEST"; then
+            HAS_PHRASE=true
+          fi
+          if echo "$ISSUE_BODY" | grep -qE '^[[:space:]]*-[[:space:]]*\[[[:space:]xX]\]'; then
+            HAS_BOX=true
+          fi
+
+          # Stable marker so future tweaks to the reminder text don't break idempotency.
+          MARKER='<!-- pangea-to-test-reminder -->'
+
+          case "$ACTION" in
+            opened|edited)
+              if [ "$OPTED_OUT" = "true" ] || { [ "$HAS_PHRASE" = "true" ] && [ "$HAS_BOX" = "true" ]; }; then
+                echo "Issue has TO TEST checklist or opt-out. Passing."
+                exit 0
+              fi
+              # Idempotency: only post the reminder once per issue.
+              EXISTING=$(gh issue view "$NUMBER" --json comments \
+                -q "[.comments[].body] | map(select(test(\"pangea-to-test-reminder\"))) | length")
+              if [ "${EXISTING:-0}" -gt 0 ]; then
+                echo "Reminder already posted. Skipping."
+                exit 0
+              fi
+
+              if [ "$HAS_PHRASE" = "true" ] && [ "$HAS_BOX" = "false" ]; then
+                LEAD='👋 This issue has a **TO TEST** section, but the items aren'"'"'t in checkbox shape — testers can'"'"'t tick them off.'
+                CLOSER='**Edit the issue description** (✏️ in the top-right) and convert each step to start with `- [ ]` (hyphen, space, square brackets, space). Numbered lists (`1.`, `2.`) and plain bullets (`-`, `*`) won'"'"'t render as clickable checkboxes for testers. The check re-runs on every edit; this comment will not repeat.'
+              else
+                LEAD='👋 This issue is missing a **TO TEST** checklist.'
+                CLOSER='**Edit the issue description** (✏️ in the top-right) to add one or the other. The check re-runs on every edit; this comment will not repeat.'
+              fi
+
+              REMINDER=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s' \
+                "$LEAD" \
+                '' \
+                'Per [issues-and-prs.instructions.md](https://github.com/pangeachat/.github/blob/main/.github/instructions/issues-and-prs.instructions.md#issues), the **issue description** (not a comment) must contain one of:' \
+                '' \
+                '- A `TO TEST` checklist where every step starts with `- [ ]` — these become clickable checkboxes for testers. Steps should be concrete client-app actions a non-developer can follow (open, tap, type, navigate, observe — no terminal/server steps).' \
+                '- The exact opt-out phrase `No client testing needed` (case-insensitive, must match verbatim) followed by `—` and a brief reason. Example: `No client testing needed — internal benchmark plumbing; no client-visible change.`' \
+                '' \
+                "$CLOSER" \
+                '' \
+                "$MARKER")
+              gh issue comment "$NUMBER" --body "$REMINDER"
+              ;;
+            closed)
+              if [ "$STATE_REASON" = "not_planned" ]; then
+                echo "Issue was closed as not planned - skipping labels."
+                exit 0
+              fi
+
+              if [ "$STATE_REASON" = "duplicate" ]; then
+                echo "Issue was closed as duplicate - skipping labels."
+                exit 0
+              fi
+
+              if [ "$OPTED_OUT" = "true" ]; then
+                echo "Opt-out present. Skipping needs-testing labels."
+                exit 0
+              fi
+              IFS=',' read -ra LABELS <<< "$LABELS_INPUT"
+              for label in "${LABELS[@]}"; do
+                trimmed=$(echo "$label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                if [ -n "$trimmed" ]; then
+                  gh issue edit "$NUMBER" --add-label "$trimmed"
+                fi
+              done
+              ;;
+            *)
+              echo "Unknown action: $ACTION. Skipping."
+              ;;
+          esac
