@@ -1,0 +1,106 @@
+name: Reusable — Sync issue templates from pangeachat/workflows
+
+# Sync the caller repo's .github/ISSUE_TEMPLATE/{bug_report,feature_request,other}.md
+# from this repo's canonical copies. If they differ, open (or update) a PR in the caller.
+#
+# Why this exists: pangeachat/.github is private, so its default community-health files
+# only apply to private repos in the org. Public repos can't inherit. This workflow
+# fans the canonical templates out to public repos.
+#
+# config.yml and any repo-specific templates (test_report.md, etc.) are NOT touched —
+# only the three shared .md files.
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        description: Ref of pangeachat/workflows to pull templates from. Default main.
+        type: string
+        default: main
+      pr_branch:
+        description: Branch name for the auto-PR.
+        type: string
+        default: chore/sync-issue-templates
+      pr_label:
+        description: Label to apply to the auto-PR. Empty to skip labeling.
+        type: string
+        default: ''
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out caller repo
+        uses: actions/checkout@v4
+
+      - name: Fetch canonical templates
+        uses: actions/checkout@v4
+        with:
+          repository: pangeachat/workflows
+          ref: ${{ inputs.source_ref }}
+          path: .pangea-workflows-src
+          sparse-checkout: |
+            .github/ISSUE_TEMPLATE
+          sparse-checkout-cone-mode: false
+
+      - name: Copy templates and detect drift
+        id: copy
+        run: |
+          set -euo pipefail
+          mkdir -p .github/ISSUE_TEMPLATE
+          for f in bug_report.md feature_request.md other.md; do
+            src=".pangea-workflows-src/.github/ISSUE_TEMPLATE/$f"
+            dst=".github/ISSUE_TEMPLATE/$f"
+            if [ ! -f "$src" ]; then
+              echo "WARN: source $src missing — skipping"
+              continue
+            fi
+            cp "$src" "$dst"
+          done
+          rm -rf .pangea-workflows-src
+          if [ -z "$(git status --porcelain -- .github/ISSUE_TEMPLATE)" ]; then
+            echo "No drift. Skipping PR."
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Drift detected."
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or update PR
+        if: steps.copy.outputs.drift == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ inputs.pr_branch }}
+          PR_LABEL: ${{ inputs.pr_label }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "$BRANCH"
+          git add .github/ISSUE_TEMPLATE
+          git commit -m "chore: sync issue templates from pangeachat/workflows"
+          git push --force-with-lease origin "$BRANCH"
+
+          EXISTING=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number' || echo "")
+          if [ -z "$EXISTING" ]; then
+            gh pr create \
+              --title "chore: sync issue templates from pangeachat/workflows" \
+              --body "$(cat <<'EOF'
+Auto-synced canonical issue templates from [pangeachat/workflows](https://github.com/pangeachat/workflows/tree/main/.github/ISSUE_TEMPLATE).
+
+Edit the canonical source there to update all consumer repos in one place.
+
+See [pangeachat/workflows#1](https://github.com/pangeachat/workflows/issues/1) for background.
+EOF
+)"
+            if [ -n "$PR_LABEL" ]; then
+              NEW=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')
+              gh pr edit "$NEW" --add-label "$PR_LABEL" || true
+            fi
+          else
+            echo "PR #$EXISTING already open on branch $BRANCH; pushed updated commit."
+          fi
