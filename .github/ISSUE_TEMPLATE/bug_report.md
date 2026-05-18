@@ -1,38 +1,26 @@
 ---
 name: 🐛 Bug report
 about: Report unexpected behavior that interferes with app functionality
-title: ""
-labels: ""
-assignees: ""
+title: ''
+labels: ''
+assignees: ''
+
 ---
 
-**Describe the bug**
-Describe what the bug is, and how it should be changed.
+**Describe the bug** 
+> Describe what the bug is, and how it should be changed.
 
-**To Reproduce**
-Steps to reproduce the behavior:
 
-1.
 
-**Environment**
-Where was the bug encountered?
-
-- [ ] Staging
-- [ ] Production
-      OS: [e.g. iOS]
-      Browser: [e.g. chrome, safari]
-
-**Sentry link** (if applicable)
-
+---
 **TO TEST**
+> After implementation, include a list of changes to be looked over
+- [ ] 
 
-<!--
-REQUIRED. Concrete client-app actions a non-developer can follow to verify
-the fix works end-to-end (open, tap, type, navigate, observe — no terminal/server steps).
-Each step must start with `- [ ]` so testers can tick it off.
+---
+**Environment**
+> Where was the bug encountered?
+ - [ ] Staging
+ - [ ] Production
 
-If this change has no client-visible behavior (e.g. pure infra, logging), write:
-  "No client testing needed — [brief reason]"
--->
-
-- [ ]
+OS and/or Browser: 
