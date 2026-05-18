@@ -93,8 +93,6 @@ jobs:
 Auto-synced canonical issue templates from [pangeachat/workflows](https://github.com/pangeachat/workflows/tree/main/.github/ISSUE_TEMPLATE).
 
 Edit the canonical source there to update all consumer repos in one place.
-
-See [pangeachat/workflows#1](https://github.com/pangeachat/workflows/issues/1) for background.
 EOF
 )"
             if [ -n "$PR_LABEL" ]; then
