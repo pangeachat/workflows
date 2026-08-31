@@ -70,7 +70,7 @@ jobs:
                 'Per [issues-and-prs.instructions.md](https://github.com/pangeachat/.github/blob/main/.github/instructions/issues-and-prs.instructions.md#issues), the **issue description** (not a comment) must contain one of:' \
                 '' \
                 '- A `TO TEST` checklist where every step starts with `- [ ]` — these become clickable checkboxes for testers. Steps should be concrete client-app actions a non-developer can follow (open, tap, type, navigate, observe — no terminal/server steps).' \
-                '- The exact opt-out phrase `No client testing needed` (case-insensitive, must match verbatim) followed by `—` and a brief reason. Example: `No client testing needed — internal benchmark plumbing; no client-visible change.`' \
+                '- The exact opt-out phrase `No client testing needed` (case-insensitive, must match verbatim) followed by `,` and a brief reason (issues.instructions.md; only the phrase itself is checked). Example: `No client testing needed, internal benchmark plumbing; no client-visible change.`' \
                 '' \
                 "$CLOSER" \
                 '' \
