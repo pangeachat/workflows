@@ -83,7 +83,11 @@ jobs:
           git checkout -B "$BRANCH"
           git add .github/ISSUE_TEMPLATE
           git commit -m "chore: sync issue templates from pangeachat/workflows"
-          git push --force-with-lease origin "$BRANCH"
+          # Plain --force: checkout fetches only main, so there is no remote-tracking
+          # ref for $BRANCH and --force-with-lease rejects with "stale info" whenever
+          # the branch already exists (i.e. any week the previous sync PR is unmerged).
+          # The branch is automation-owned; canonical edits belong in this repo.
+          git push --force origin "$BRANCH"
 
           EXISTING=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number' || echo "")
           if [ -z "$EXISTING" ]; then
